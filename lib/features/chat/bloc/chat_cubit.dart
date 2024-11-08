@@ -21,7 +21,7 @@ class ChatCubit extends Cubit<ChatState> {
             toFirestore: (value, options) => value.toMap(),
           );
 
-  void sendChat({required String uid, required String message}) {
+  void sendChat({required String uid, required Map<String, dynamic> message}) {
     ServiceLocator.instance
         .get<Database>()
         .writePublicMessage(Message(message: message, sender: uid));

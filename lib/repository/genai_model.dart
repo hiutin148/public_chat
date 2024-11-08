@@ -7,7 +7,9 @@ class GenAiModel {
   GenAiModel() {
     const apiKey = String.fromEnvironment('apiKey');
 
-    _model = GenerativeModel(model: 'gemini-1.5-pro', apiKey: apiKey);
+    _model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: "AIzaSyDwW51nRVg5odhU8-gDN4RzgWKjiA4QW-w");
     _session = _model.startChat();
   }
 

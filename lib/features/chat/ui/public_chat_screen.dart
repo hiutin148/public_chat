@@ -1,13 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dash_flags/dash_flags.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_ui_firestore/firebase_ui_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:public_chat/_shared/bloc/localization_manager/localization_manager_cubit.dart';
 import 'package:public_chat/_shared/bloc/user_manager/user_manager_cubit.dart';
 import 'package:public_chat/_shared/data/chat_data.dart';
 import 'package:public_chat/_shared/widgets/chat_bubble_widget.dart';
 import 'package:public_chat/_shared/widgets/message_box_widget.dart';
 import 'package:public_chat/features/chat/bloc/chat_cubit.dart';
+import 'package:public_chat/models/entities/language_entity.dart';
+import 'package:public_chat/repository/language_repository.dart';
 import 'package:public_chat/utils/locale_support.dart';
 
 class PublicChatScreen extends StatelessWidget {
@@ -16,12 +20,15 @@ class PublicChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final User? user = FirebaseAuth.instance.currentUser;
-
+    final LocalizationManagerCubit localizationManagerCubit = BlocProvider.of<LocalizationManagerCubit>(context);
     return BlocProvider<ChatCubit>(
       create: (context) => ChatCubit(),
       child: Scaffold(
           appBar: AppBar(
             title: Text(context.locale.publicRoomTitle),
+            actions: const [
+              LanguageButton(),
+            ],
           ),
           body: Column(
             children: [
@@ -31,8 +38,7 @@ class PublicChatScreen extends StatelessWidget {
                     return FirestoreListView<Message>(
                       query: context.read<ChatCubit>().chatContent,
                       reverse: true,
-                      itemBuilder: (BuildContext context,
-                          QueryDocumentSnapshot<Message> doc) {
+                      itemBuilder: (BuildContext context, QueryDocumentSnapshot<Message> doc) {
                         if (!doc.exists) {
                           return const SizedBox.shrink();
                         }
@@ -40,10 +46,8 @@ class PublicChatScreen extends StatelessWidget {
                         final Message message = doc.data();
 
                         return BlocProvider<UserManagerCubit>.value(
-                          value: UserManagerCubit()
-                            ..queryUserDetail(message.sender),
-                          child:
-                              BlocBuilder<UserManagerCubit, UserManagerState>(
+                          value: UserManagerCubit()..queryUserDetail(message.sender),
+                          child: BlocBuilder<UserManagerCubit, UserManagerState>(
                             builder: (context, state) {
                               String? photoUrl;
                               String? displayName;
@@ -54,18 +58,18 @@ class PublicChatScreen extends StatelessWidget {
                               }
 
                               return ChatBubble(
-                                  isMine: message.sender == user?.uid,
-                                  message: message.message,
-                                  photoUrl: photoUrl,
-                                  displayName: displayName,
-                                  translations: message.translations);
+                                isMine: message.sender == user?.uid,
+                                message: message.message[localizationManagerCubit.state.locale?.languageCode],
+                                photoUrl: photoUrl,
+                                displayName: displayName,
+                                translations: message.translations,
+                              );
                             },
                           ),
                         );
                       },
                       emptyBuilder: (context) => const Center(
-                        child: Text(
-                            'No messages found. Send the first message now!'),
+                        child: Text('No messages found. Send the first message now!'),
                       ),
                       loadingBuilder: (context) => const Center(
                         child: CircularProgressIndicator(),
@@ -80,13 +84,92 @@ class PublicChatScreen extends StatelessWidget {
                     // do nothing
                     return;
                   }
-                  FirebaseFirestore.instance
-                      .collection('public')
-                      .add(Message(sender: user.uid, message: value).toMap());
+                  FirebaseFirestore.instance.collection('public').add(
+                        Message(sender: user.uid, message: {BlocProvider.of<LocalizationManagerCubit>(context).state.locale?.languageCode ?? "en": value}).toMap(),
+                      );
                 },
               )
             ],
           )),
+    );
+  }
+}
+
+class LanguageButton extends StatefulWidget {
+  const LanguageButton({super.key});
+
+  @override
+  State<LanguageButton> createState() => _LanguageButtonState();
+}
+
+class _LanguageButtonState extends State<LanguageButton> {
+  late final LocalizationManagerCubit localizationManagerCubit;
+
+  @override
+  void initState() {
+    super.initState();
+    localizationManagerCubit = BlocProvider.of<LocalizationManagerCubit>(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: InkWell(
+        onTap: () {
+          showBottomSheet(
+            context: context,
+            enableDrag: true,
+            showDragHandle: true,
+            builder: (context) {
+              return Container(
+                color: Colors.white,
+                child: ListView.separated(
+                  itemCount: LanguageRepository.instance.languages.length,
+                  itemBuilder: (context, index) {
+                    final LanguageEntity language = LanguageRepository.instance.languages[index];
+                    return InkWell(
+                      onTap: () {},
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            LanguageFlag(
+                              language: Language.fromCode(language.langCode ?? ""), // OR Language.fromCode('ar')
+                              height: 20,
+                            ),
+                            const SizedBox(width: 4,),
+                            Text(language.langEnglishName ?? ""),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                  separatorBuilder: (BuildContext context, int index) {
+                    return  Container(
+                      height: 10,
+                      color: Colors.black.withOpacity(0.1),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+          return;
+        },
+        child: LanguageFlag(
+          language: Language.fromCode(localizationManagerCubit.state.locale?.languageCode ?? ""), // OR Language.fromCode('ar')
+          height: 20,
+        ),
+      ),
     );
   }
 }
